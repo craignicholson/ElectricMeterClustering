@@ -1,0 +1,905 @@
+---
+title: "Rate Study Exploration"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Packages
+
+```{r packages}
+library(tidyverse)
+library(lubridate)
+library(gridExtra)
+library(knitr)
+```
+
+## Load the Data
+
+```{r data}
+
+#data <- read.csv(file="C:/Users/craig/source/repos/rcode/duck_river_rate_study/2018.01.csv", header=TRUE, sep=",")
+data <- read_csv("C:/Users/craig/source/repos/rcode/duck_river_rate_study/2018.01.csv")
+
+```
+
+## Functions
+
+```{r functions}
+
+# fxnInterval_from_datetime numbers the date with a interger as ending intervals
+fxnInterval_from_datetime <- function(dt) {
+  
+  #TODO: make this a parameter
+  divisor = 15
+  interval = 96
+  h = hour(dt)
+  m = minute(dt)
+  interval = ( (h * 60) / divisor ) + ( m / divisor )
+
+  if (interval == 0) {
+    interval = 96
+  } 
+  
+  return(interval)
+}
+
+# TODO: Would be nice to have something to return HHMM and make factors
+# This will be easy to read for users and if we factor them or index it 
+# will plot correctly.  Might run faster too.
+fxn_hour_minute <- function(dt) {
+   dt <- format(as.POSIXct(dt, 
+                           format="%Y-%m-%d %H:%M"),
+                           format="%H:%M")
+   
+  return (dt)
+}
+
+
+```
+
+```{r functions_plots}
+
+fxn_histogram_plot <- function(df,LocationNumber) {
+  
+  p1 <- ggplot(df,aes(x = Readvalue)) +
+    geom_histogram(binwidth=0.05, color = 'black', fill = '#333333') +
+    ggtitle(paste("Histogram of kWh for Location ",LocationNumber, " (bin=0.05)"))
+
+
+  p2 <- ggplot(df,aes(x = Readvalue)) +
+     geom_histogram(binwidth=0.05, color = 'black', fill = '#333333') +
+     scale_x_sqrt() +
+     xlab("sqrt(ReadValue)") +
+     ggtitle(paste("Histogram of kWh for Location (bin=0.05)",LocationNumber, ""))
+  
+  p3 <- ggplot(df,aes(x = Readvalue)) +
+    geom_histogram(binwidth=0.05, color = 'black', fill = '#333333') +
+    scale_x_log10() +
+    xlab("scale_x_log10") +
+    ggtitle(paste("Histogram of kWh for Location (bin=0.05)",LocationNumber, ""))
+    
+    grid.arrange(p1, p2, p3, ncol=1)
+}
+
+
+fxn_daily_scatter_plot <- function(df,LocationNumber) {
+  
+  ggplot(df, aes(x=hhmm, y=Readvalue, group=h.ReadDate)) +
+    geom_line(alpha = 1/2) +
+    xlab("Time") +
+    ylab("kWh") +
+    ggtitle(paste("Load Shapes | January 2018 | group = h.ReadDate | ", LocationNumber, ""))
+}  
+  
+fxn_dow_scatter_plot <- function(df,LocationNumber) {
+  
+  plt <- ggplot(df, aes(x=hhmm, y=Readvalue, group=h.ReadDate)) +
+    geom_line(alpha = 1/2) +
+    facet_wrap(~weekday, ncol=7) +
+    xlab("Time") +
+    ylab("kWh") +
+    ggtitle(paste("Load Shapes | January 2018 | group = h.ReadDate | ", LocationNumber, ""))
+  
+  return(plt)
+}
+
+fxn_day_scatter_plot <- function(df,LocationNumber) {
+  
+  plt <- ggplot(df, aes(x=hhmm, y=Readvalue, group=h.ReadDate)) +
+    geom_line(alpha = 1/2) +
+    facet_wrap(h.ReadDate ~ weekday, ncol=7) +
+    xlab("Time") +
+    ylab("kWh") +
+    ggtitle(paste("Load Shapes | January 2018 | group = h.ReadDate | ", LocationNumber, ""))
+  
+  return(plt)
+}
+
+fxn_scaled_plot <- function(locationNumber) {
+  
+  p1 <- ggplot(subset(data_summary,data_summary$LocationNumber == locationNumber), aes(x=hhmm, y=mean)) +
+    geom_point() +
+    xlab("Time") +
+    ylab("mean") +
+    theme(axis.text.x = element_text(angle = -90, hjust = 0)) +
+    #scale_x_date(breaks = data_summary$hhmm[seq(1, length(data_summary$hhmm), by = 4)]) +
+    ggtitle(paste("Load Shapes | January 2018 | ",locationNumber, ""))
+  
+  p2 <- ggplot(subset(data_summary,data_summary$LocationNumber == locationNumber), aes(x=hhmm, y=scaled_mean)) +
+    geom_point() +
+    xlab("Time") +
+    ylab("scaled_mean") +
+    theme(axis.text.x = element_text(angle = -90, hjust = 0))  +
+    ggtitle(paste("Load Shapes | January 2018 | ",locationNumber, ""))
+
+  grid.arrange(p1, p2, ncol=2)
+}
+
+# TODO FIX NAME
+fxn_scaled_plot_facet_wrap <- function(locationNumber) {
+  
+  p1 <-  ggplot(subset(data_summary,data_summary$LocationNumber %in% locationNumber), aes(x=hhmm, y=mean,group=LocationNumber, color = LocationNumber)) +
+    geom_line() +
+    xlab("Time") +
+    ylab("mean") +
+    theme(axis.text.x = element_text(angle = -90, hjust = 0))  +
+    ggtitle(paste("Load Shapes | January 2018"))
+  
+  p2 <- ggplot(subset(data_summary,data_summary$LocationNumber %in% locationNumber), aes(x=hhmm, y=scaled_mean,group=LocationNumber, color = LocationNumber)) +
+    geom_line() +
+    xlab("Time") +
+    ylab("scaled_mean") +
+    theme(axis.text.x = element_text(angle = -90, hjust = 0))  +
+    ggtitle(paste("Load Shapes | January 2018"))
+  
+    grid.arrange(p1, p2, ncol=2)
+}
+
+```
+
+
+```{r testing_function_two}
+
+# test$i.ReadDate
+# 
+# for (i in 1:1){
+#   interval <- fxnInterval_from_datetime(dt)
+#   hhmm <- fxn_hour_minute(dt)
+#   print(sprintf("%s is time: %s %i", dt, hhmm, interval)) 
+#   #print(sprintf("%s",hhmm)) 
+#   dt <- dt + minutes(15)
+# }
+
+```
+
+
+## Data Review
+
+Customer Wants us to find similar accounts from the same rate codes as the profiles provided.
+- January - 2018
+- kWh
+
+```{r structure}
+str(data)
+```
+
+```{r summary, echo=FALSE}
+# Sammple Data
+head(data)
+
+# summary of data
+summary(data)
+
+```
+
+## Data Wrangling
+
+
+### Date Formatting and Creating Grouping Keys
+
+```{r cleanup_of_dates}
+
+#data$dtReadDate <- parse_date_time(data$i.ReadDate, orders="ymd HMS")
+#data$dtReadDay <- parse_date_time(data$h.ReadDate, orders="ymd HMS")
+data$month <- month(data$h.ReadDate)
+data$week <- week(data$h.ReadDate)
+data$weekday  <- wday(data$h.ReadDate, label = TRUE)
+data$h <- hour(data$i.ReadDate)            # this needs to be rolled back by 15min to be correct
+data$hhmm <- fxn_hour_minute(data$i.ReadDate)
+
+# What about a grouping flag for weekday vs weekend
+```
+
+### Factoring the WeekDays, Weekends, and HHMM for ending interval
+
+```{r Factor_Identifiers}
+data$MeterIdentifier <- factor(data$MeterIdentifier,ordered = TRUE)
+data$LocationNumber <- factor(data$LocationNumber,ordered = TRUE)
+
+
+
+```
+
+```{r weekdays}
+
+weekday_levels <- c('Mon', 'Tue', 'Wed', 'Thu', 'Fri')
+data$isWeekDay <- factor((weekdays(data$h.ReadDate, abbreviate = TRUE ) 
+                          %in% weekday_levels), 
+                          levels=c(FALSE, TRUE), labels=c('Weekend', 'Weekday')) 
+
+#day_of_week_levels <- c('Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat')
+#min(test$weekday)
+#[1] Mon
+#Levels: Sun < Mon < Tue < Wed < Thu < Fri < Sat
+
+```
+
+```{r factor_hour_minute}
+
+hhmm_levels <- c("00:15","00:30","00:45","01:00",
+                      "01:15","01:30","01:45","02:00",
+                      "02:15","02:30","02:45","03:00",
+                      "03:15","03:30","03:45","04:00",
+                      "04:15","04:30","04:45","05:00",
+                      "05:15","05:30","05:45","06:00",
+                      "06:15","06:30","06:45","07:00",
+                      "07:15","07:30","07:45","08:00",
+                      "08:15","08:30","08:45","09:00",
+                      "09:15","09:30","09:45","10:00",
+                      "10:15","10:30","10:45","11:00",
+                      "11:15","11:30","11:45","12:00",
+                      "12:15","12:30","12:45","13:00",
+                      "13:15","13:30","13:45","14:00",
+                      "14:15","14:30","14:45","15:00",
+                      "15:15","15:30","15:45","16:00",
+                      "16:15","16:30","16:45","17:00",
+                      "17:15","17:30","17:45","18:00",
+                      "18:15","18:30","18:45","19:00",
+                      "19:15","19:30","19:45","20:00",
+                      "20:15","20:30","20:45","21:00",
+                      "21:15","21:30","21:45","22:00",
+                      "22:15","22:30","22:45","23:00",
+                      "23:15","23:30","23:45","00:00")
+
+data$hhmm <- factor(data$hhmm, levels = hhmm_levels,ordered = TRUE)
+
+```
+
+### Calculate the max ReadValue for each Location for scaling
+
+```{r max_add_max_for_each_location}
+
+# We can add more group by's if needed
+#    group_by(LocationNumber, h.ReadDate) %>%
+data <-
+  data %>%
+   group_by(LocationNumber) %>%
+   mutate(max.per.group = max(as.numeric(Readvalue)))
+
+```
+
+### Scale the Readvalue 
+
+Allows us to compare locations with out scaling issues
+
+```{r scaling_attempt_one}
+# Fingers cross this gives us like values between 0 and 1 for all meters
+data$scale_by_monthmax <- data$Readvalue / data$max.per.group
+
+```
+
+```{r oneday_filter_test}
+
+review <- subset(data, data$h.ReadDate < as.POSIXct("2018-01-01") & data$LocationNumber == 4191826)
+
+```
+
+```{r interval_fill}
+
+#data$interval <- fxnInterval_from_datetime(data$dtReadDate)
+
+```
+
+### Calculate the data summary
+
+```{r average_usage_all}
+
+# Should dtReadDay, h, are anyother field be usable here?  weekday at least since Sat and Sun are not diff load shapes
+data_summary <- data %>%
+  group_by(hhmm, LocationNumber, MeterIdentifier, Uom)  %>%
+  summarise(mean = mean(Readvalue),
+            median = median(as.numeric(Readvalue)),
+            min = min(Readvalue),
+            max = max(Readvalue),
+            total = sum(Readvalue),
+            std = sd(Readvalue), 
+            scaled_mean = mean(scale_by_monthmax),
+            n = n())  %>% 
+  arrange(hhmm, LocationNumber, MeterIdentifier, Uom) 
+
+```
+
+### Calculate the data totals
+
+To be used for removing dirty data.
+
+```{r total_counts_usage_all}
+
+# Should dtReadDay, h, are anyother field be usable here?  weekday at least since Sat and Sun are not diff load shapes
+data_total <- data_summary %>%
+  group_by(LocationNumber, MeterIdentifier)  %>%
+  summarise(intervals = sum(n),
+            expected = as.numeric(2976))  %>% 
+  arrange(LocationNumber, MeterIdentifier) 
+
+```
+
+
+### Sample the Data an Remove Bad Locations from Sample
+
+```{r sample_locations}
+set.seed(8675)
+sample.locations <- sample(data$LocationNumber,1000)
+
+length(sample.locations)
+
+```
+
+```{r bad_locations}
+
+# get the unique locations
+x <- unique(data$LocationNumber)
+locationNumber <- data.frame(x)
+
+summary(locationNumber)
+
+sample <- locationNumber[sample(nrow(locationNumber), 5), ]
+sample <- c(sample, '4191826')
+length(sample)
+length(unique(sample))
+
+# Get the data just for the unique locations
+sampleData <- subset(data, data$LocationNumber %in% sample)
+
+
+```
+
+### Count of the Locations with Good Data
+
+```{r locations_w_missing_data}
+
+count(subset(data_total, data_total < 2976))
+
+```
+
+### Scale the Summary Values
+
+```{r scaling_additional_values}
+
+
+data_summary$scaled_value_max <- data_summary$mean/max(data_summary$mean)
+data_summary$scaled_value_sd <- data_summary$mean/data_summary$std
+
+
+```
+
+```{r data_out_csv_example}
+
+# x <- subset(data_summary,data_summary$LocationNumber == 11280)
+# 
+# write.table(x, file = "sample2.csv", 
+#             sep = ",", 
+#             col.names = NA,
+#             qmethod = "double")
+```
+
+### Histogram for January 2018 - All Locations in this Sample, 40,135,207 intervals
+
+Data is left shifted, and we have a long right tail.  Data is skewed by a few meters.  
+Data has locations that is not represntative of the entire dataset.
+
+Data is not normally distributed.
+
+```{r histogram, fig.height=6, fig.width=6, echo=FALSE}
+# ggplot(data,aes(x = data$Readvalue)) +
+#   geom_histogram(binwidth=0.05, color = 'black', fill = '#333333') +
+#   scale_x_continuous(limits=c(0,5)) + 
+#   ggtitle("Histogram of kWh (bin=0.05)")
+```
+
+
+```{r histogram_1}
+#h1 <- 
+#  ggplot(data,aes(x = data$Readvalue)) +
+#  geom_histogram(binwidth=0.05, color = 'black', fill = '#333333') +
+#  scale_x_continuous(limits=c(0,50)) + 
+#  ggtitle("Histogram of kWh (bin=0.05)")
+```
+
+
+```{r histogram_normailzed}
+
+#h2 <- h1 + scale_x_log10()
+#h3 <- h1 + scale_x_sqrt()
+#h4 <- h1 + coord_trans('sqrt')
+
+```
+
+
+```{r histogram_grid, ,fig.width=10, fig.height=5,echo=FALSE}
+
+ #grid.arrange(h1,h2,h3,h4, ncol=2)
+ 
+```
+
+## Location 4191826
+
+```{r plot_1, ,fig.width=10, fig.height=10,echo=FALSE}
+
+LocationNumber <- 4191826
+
+df <- subset(data,data$LocationNumber == 4191826)
+
+fxn_histogram_plot(df,LocationNumber)
+fxn_daily_scatter_plot(df,LocationNumber)
+fxn_dow_scatter_plot(df,LocationNumber)
+```
+
+A review of the read values shows us a left skewed distibution, and too much noise in the scatter plots.
+
+A log10 scale for readvalue helps to normally distribute the data set.  Which allows us to see the distribution much better.
+This will help us to get closer to a more linear model.
+
+
+
+```{r plot_2, fig.width=10, fig.height=10,echo=FALSE}
+
+fxn_day_scatter_plot(df,LocationNumber)
+
+```
+
+```{r plot_3,fig.width=10, fig.height=5,echo=FALSE}
+
+fxn_scaled_plot(LocationNumber)
+rm(df)
+
+```
+
+## Location 70220
+
+```{r plot_4, ,fig.width=10, fig.height=5,echo=FALSE}
+
+LocationNumber <- 70220
+
+df <- subset(data,data$LocationNumber == 70220)
+
+fxn_histogram_plot(df,LocationNumber)
+fxn_daily_scatter_plot(df,LocationNumber)
+fxn_dow_scatter_plot(df,LocationNumber)
+```
+
+```{r plot_5, fig.width=10, fig.height=10,echo=FALSE}
+
+fxn_day_scatter_plot(df,LocationNumber)
+
+```
+
+```{r plot_6,fig.width=10, fig.height=5,echo=FALSE}
+
+fxn_scaled_plot(LocationNumber)
+rm(df)
+
+```
+
+## Location 1751219
+
+```{r plot_7, ,fig.width=10, fig.height=5,echo=FALSE}
+
+LocationNumber <- 1751219
+
+df <- subset(data,data$LocationNumber == 1751219)
+
+fxn_histogram_plot(df,LocationNumber)
+fxn_daily_scatter_plot(df,LocationNumber)
+fxn_dow_scatter_plot(df,LocationNumber)
+```
+
+```{r plot_8, fig.width=10, fig.height=10,echo=FALSE}
+
+fxn_day_scatter_plot(df,LocationNumber)
+
+```
+
+```{r plot_9,fig.width=10, fig.height=5,echo=FALSE}
+
+fxn_scaled_plot(LocationNumber)
+rm(df)
+
+```
+
+## Location 9142030
+
+```{r plot_19, ,fig.width=10, fig.height=5,echo=FALSE}
+
+LocationNumber <- 9142030
+
+df <- subset(data,data$LocationNumber == 9142030)
+
+fxn_histogram_plot(df,LocationNumber)
+fxn_daily_scatter_plot(df,LocationNumber)
+fxn_dow_scatter_plot(df,LocationNumber)
+```
+
+```{r plot_20, fig.width=10, fig.height=10,echo=FALSE}
+
+fxn_day_scatter_plot(df,LocationNumber)
+
+```
+
+```{r plot_21,fig.width=10, fig.height=5,echo=FALSE}
+
+fxn_scaled_plot(LocationNumber)
+rm(df)
+
+```
+
+## Location 9030286
+
+```{r plot_22, ,fig.width=10, fig.height=5,echo=FALSE}
+
+LocationNumber <- 9030286
+
+df <- subset(data,data$LocationNumber == 9030286)
+
+fxn_histogram_plot(df,LocationNumber)
+fxn_daily_scatter_plot(df,LocationNumber)
+fxn_dow_scatter_plot(df,LocationNumber)
+```
+
+```{r plot_23, fig.width=10, fig.height=10,echo=FALSE}
+
+fxn_day_scatter_plot(df,LocationNumber)
+
+```
+
+```{r plot_24,fig.width=10, fig.height=5,echo=FALSE}
+
+fxn_scaled_plot(LocationNumber)
+rm(df)
+
+```
+
+## Scaled Only so we can visually compare
+
+```{r plot_25,fig.width=20, fig.height=5,echo=FALSE}
+
+p1 <- ggplot(subset(data_summary,data_summary$LocationNumber == 4191826), aes(x=hhmm, y=scaled_mean)) +
+    geom_point() +
+    xlab("Time") +
+    ylab("scaled_mean") +
+    theme(axis.text.x = element_text(angle = -90, hjust = 0))  +
+    ggtitle(paste("Load Shape | January 2018 | ",4191826, ""))
+
+p2 <- ggplot(subset(data_summary,data_summary$LocationNumber == 70220), aes(x=hhmm, y=scaled_mean)) +
+    geom_point() +
+    xlab("Time") +
+    ylab("scaled_mean") +
+    theme(axis.text.x = element_text(angle = -90, hjust = 0))  +
+    ggtitle(paste("Load Shape | January 2018 | ",70220, ""))
+
+p3 <- ggplot(subset(data_summary,data_summary$LocationNumber == 1751219), aes(x=hhmm, y=scaled_mean)) +
+    geom_point() +
+    xlab("Time") +
+    ylab("scaled_mean") +
+    theme(axis.text.x = element_text(angle = -90, hjust = 0))  +
+    ggtitle(paste("Load Shape | January 2018 | ",1751219, ""))
+
+p4 <- ggplot(subset(data_summary,data_summary$LocationNumber == 9142030), aes(x=hhmm, y=scaled_mean)) +
+    geom_point() +
+    xlab("Time") +
+    ylab("scaled_mean") +
+    theme(axis.text.x = element_text(angle = -90, hjust = 0))  +
+    ggtitle(paste("Load Shape | January 2018 | ",9142030, ""))
+
+p5 <- ggplot(subset(data_summary,data_summary$LocationNumber == 9030286), aes(x=hhmm, y=scaled_mean)) +
+    geom_point() +
+    xlab("Time") +
+    ylab("scaled_mean") +
+    theme(axis.text.x = element_text(angle = -90, hjust = 0))  +
+    ggtitle(paste("Load Shape | January 2018 | ",9030286, "")) 
+    #scale_x_discrete(breaks = seq("00:15","00:00",4))
+
+grid.arrange(p1, p2, p3, p4, p5, ncol= 5)
+
+```
+
+## Compare 4191826 and 1751219 by Day
+
+We saw above the locations for  4191826 and 1751219 have similar mean load shapes.  Let's see if they have similar day to day load shapes for the read values.
+
+### Scaled Plot 4191826 and 1751219
+
+```{r QuickCompareOfTwoMeters, fig.height=15, fig.width=20}
+
+locations <- c( 4191826,1751219 )
+df <- subset(data, data$LocationNumber %in% locations)
+
+ggplot(df,aes(x=hhmm, y=Readvalue, group = LocationNumber, color = LocationNumber)) +
+    geom_line() +
+    facet_wrap(h.ReadDate ~ weekday, ncol=7) +
+    xlab("Time") +
+    ylab("scaled kWh (ReadValue/max(ReadValue") 
+
+```
+
+```{r scaled_mean_best_0, fig.width=20, fig.height=5}
+fxn_scaled_plot_facet_wrap(locations)
+```
+
+### Raw Interval Plot 4191826 and 1751219
+
+```{r unscaled_two,fig.height=15, fig.width=20}
+ggplot(df,aes(x=hhmm, y=Readvalue, group=LocationNumber, color = LocationNumber)) +
+    geom_line() +
+    facet_wrap(h.ReadDate ~ weekday, ncol=7) +
+    xlab("Time") +
+    ylab("kWh") +
+
+rm(df)
+```
+
+```{r scaled_mean_best_01, fig.width=20, fig.height=5}
+fxn_scaled_plot_facet_wrap(locations)
+```
+
+### Scaled Interval Plot 4191826 and 4066442
+
+```{r unscaled_three,fig.height=15, fig.width=20}
+locations <- c(4191826,4066442)
+df <- subset(data, data$LocationNumber %in% locations)
+
+ggplot(df,aes(x=hhmm, y=scale_by_monthmax, group=LocationNumber, color = LocationNumber)) +
+    geom_line() +
+    facet_wrap(h.ReadDate ~ weekday, ncol=7) +
+    xlab("Time") +
+    ylab("scaled kWh (ReadValue/max(ReadValue)")  +
+    ggtitle(paste("Load Shapes | January 2018 | (", paste(c("Locations: ", locations), collapse=" "), ")"))
+```
+
+
+```{r scaled_mean_best_02, fig.width=20, fig.height=5}
+fxn_scaled_plot_facet_wrap(locations)
+```
+
+### Best Fit - Raw Interval Plot 70220 and 535450 - Best Fit
+
+```{r unscaled_four,fig.height=15, fig.width=20}
+locations <- c(70220,535450)
+df <- subset(data, data$LocationNumber %in% locations)
+
+ggplot(df,aes(x=hhmm, y=scale_by_monthmax, group=LocationNumber, color = LocationNumber)) +
+    geom_line() +
+    facet_wrap(h.ReadDate ~ weekday, ncol=7) +
+    xlab("Time") +
+    ylab("scaled kWh (ReadValue/max(ReadValue")  +
+    ggtitle(paste("Load Shapes | January 2018 | (", paste(c("Locations: ", locations), collapse=" "), ")"))
+```
+
+```{r scaled_mean_best, fig.width=20, fig.height=5}
+fxn_scaled_plot_facet_wrap(locations)
+```
+
+### Worst Fit - Raw Interval Plot 1751219 and 447770 - Worst Fit
+
+```{r unscaled_five,fig.height=15, fig.width=20}
+locations <- c(1751219,447770)
+df <- subset(data, data$LocationNumber %in% locations)
+
+ggplot(df,aes(x=hhmm, y=scale_by_monthmax, group=LocationNumber, color = LocationNumber)) +
+    geom_line() +
+    facet_wrap(h.ReadDate ~ weekday, ncol=7) +
+    xlab("Time") +
+    ylab("scaled kWh (ReadValue/max(ReadValue")  +
+    ggtitle(paste("Load Shapes | January 2018 | (", paste(c("Locations: ", locations), collapse=" "), ")"))
+```
+
+Worst fit because we used mean isntead of scaled mean to calculate the sum of the percent diff for all intervals.  A scaled mean would be less of an issue based on the plots below.
+
+```{r scaled_mean_worst , fig.width=20,fig.height=5}
+
+fxn_scaled_plot_facet_wrap(locations)
+
+```
+
+## Building a Linear Model
+We would like to build a linear model for kWh.
+
+```{r linear_model_example}
+library(memisc)
+
+locations <- c(4191826)
+df <- subset(data, data$LocationNumber %in% locations)
+
+#Subtation
+#isWeekDay
+#weekday
+
+
+m1 <- lm(Readvalue ~ hhmm + weekday,data = df)
+m2 <- lm(Readvalue ~ hhmm + isWeekDay + weekday,data = df)
+#m2 <- update(m1 ~ . + isweekDay)
+#m2 <- update(m1 ~ . + weekday)
+#m3 <- update(m2 ~ . + SubstationName)
+mtable(m1)
+
+
+
+layout(matrix(c(1,2,3,4),2,2))
+plot(m1)
+
+
+anova(m1, m2)
+
+```
+
+### Model Predictions
+
+```{r linear_model_example}
+
+thisIntervalkWh <- data.frame(hhmm = '12:00', isWeekDay = 'Weekday', weekday = 'Mon' )
+modelEstimate <- predict(m2, newdata = thisIntervalkWh, interval='prediction', level=0.95)
+
+head(modelEstimate)
+
+exp(modelEstimate)
+
+```
+
+## Normalizate the Data and review again
+
+Normailizing the data so all load profiles are simular.
+
+We do this by taking the max value and dividing all values by the max.
+This allows us to compare all locations (timeseries objects) without focusing on the total consumption.
+
+TBD
+
+## Questions
+
+1. How often are we expected to run this analysis?
+
+What we need is something like this:
+
+LocationNumber : {scaled_value1, .... scaled_value2}
+ - Possible additional factors, Sub,  RateCode, Weekday, hhmm, GIS Location??? 
+
+## Notes
+
+White-paper
+
+Predicting Consumer Load Profiles Using Commercial and Open Data
+Dauwe Vercamer, Bram Steurtewagen, Dirk Van den Poel, Senior Member, IEEE, and Frank Vermeulen
+
+This paper addresses the issue of assigning new customers, for whom no AMI readings are available, to one of these load profiles. This post-clustering phase has received little attention in the past
+
+Step: 
+Identify and remove outliers from eaplot_by_interval_by_day_4191826ch location.
+Identify and check on 0 values, and remove.
+Identify and correct or remove duplicate intervals...
+identify and remove locations with not enough data.
+
+
+Example data found
+- 33 days in the month (Whats the cause, how to clean)
+- 1 day avaiable in the month (whats the cause, how to clean or remove)
+
+Quick Goal:
+Focus on perfect data for the first run. Clean up will be a larger effort after the model is created.
+So... 31 days of data, for each hour of every single day.  Should be 31*96 = 2976 intervals per meter/location.
+
+Long Term Goal:
+- Remove outliers (I'm seeing one on the first meter already)
+
+Step 1: Identify the load profiles. check for outliers in the first metering point location. See if the chosen load profile is accurate enough to generate a model.
+
+LP can be
+Daily
+Weekly
+Monthly
+
+
+Question: how to compare the load shapes???????
+  Maybe - an average daily 15 minute pattern (96 measurements per customer). Average over what time frame, week, or month? Season?
+  Location -> pivoted data... or columar?
+  
+  Location, ReadValue1, .... ReadValue96
+  
+  or 
+  
+Question: Also, how many unique / relative profiles exist in the Duck River kWh data?
+Question: How to handled weekdays and weekends?  Include or Exclude from the means?
+Question: Do we want a profile for day or profile for weekdays and weekends?
+
+Question:  Can we use person's to determine if locations are correlted?  Is this even correct to do here?
+See Lesson4_student.html examples
+
+
+Rate Codes:
+Do we have more unique profiles which require more rate codes, or do the rate codes we have, for each location
+exhibit the same load profile shapes for their current assigned rate code?
+
+Attributes?
+What are the attributes that make up a load profile for Duck River's data?
+Rate Code?
+Meter Type?
+Weather?
+
+-----------
+
+Steps 
+- Identify Outliers
+- Remove Outliers
+- Aggregate to daily patterns / hourly partners
+- Filter time series to remove missing values
+- Normalize Time Series
+- remove estimates... etc...
+
+Additional Steps
+Select a time series to be clustered
+perform spectral clustering
+perform k-means
+calculate davis-bouldin index
+calculate dunn index
+best rank of dun and d-b
+
+## Example Models or Load Shapes
+
+Rate 22
+All electric, 400A service, residential account
+Location 4191826, meter is 300071 and
+Account # 303606-002
+Location 70220, meter is 303099 and account is 324749-001
+
+All electric 200A service
+Location 1751219
+Location 1522548 (has a scope and other out buildings)
+Account #: 
+
+All electric 600A service and geothermal HVAC
+Location 226760 - 
+
+Electric and gas or wood head 200A service
+Location 1630115
+Location 1530057
+
+
+Find all the accounts that have similar load shape.
+
+## Refereneces
+
+kernlab package for clustering
+ada and Random Forest for classification
+https://rpubs.com/FelipeRego/K-Means-Clustering
+https://www.r-bloggers.com/clustering-mixed-data-types-in-r/
+https://shiny.rstudio.com/gallery/kmeans-example.html
+https://towardsdatascience.com/how-to-cluster-your-customer-data-with-r-code-examples-6c7e4aa6c5b1
+https://uc-r.github.io/kmeans_clustering
+https://robjhyndman.com/TSDL/
+
+http://readr.tidyverse.org/reference/read_delim.html
+
+https://escience.rpi.edu/data/DA/svmbasic_notes.pdf
+
+https://cran.r-project.org/web/packages/kernlab/kernlab.pdf
+
+
+https://stats.stackexchange.com/questions/142400/quantifying-similarity-between-two-data-sets
+
+https://www.rdocumentation.org/packages/SimilarityMeasures/versions/1.4/topics/LCSS
+
+

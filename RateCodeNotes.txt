@@ -1,0 +1,592 @@
+Rate Study - Notes
+
+- Identify which Uom to use : kWh
+- Collect Raw Data
+- Clean and Scrub Raw Data
+ -- Identify and Remove Estimates
+ -- Check for Locations / Meteridentifiers with missing data (exclude meter from list)
+ -- Identifier all meters with correct amount of 15 min intervals
+ -- Identify and remove outliers from each location.
+ -- Identify and check on 0 values, and remove.
+ -- Identify and correct or remove duplicate intervals...
+ -- Identify and remove locations with not enough data
+ -- Anything Else?  What's up with Reading Quality Code 3...
+
+
+Goals
+- Pull all kWh Data for Jan
+-- Takes a few hours (2-3 to pull, zip and move data)
+-- Takes a few hours to load the data (1-2 hours)
+- Find meters with similar load shapes
+- Reduced Scope - Find meters with load shape like location 4191826
+
+```sql
+
+SELECT  
+	  h.ReadLogDate     'h.ReadDate'
+	, d.ReadDate        'i.ReadDate'   
+	, d.Readvalue      
+	, h.Uom
+	, d.ReadQualityCode  
+	, d.RecordInterval
+	, d.VeeFlag
+	, d.ChannelStatus
+	, s.SubstationName  SubstationName  
+	, h.MeterIdentifier
+    , l.LocationNumber  
+FROM mdm.dbo.meterreadintervalheader h  
+	INNER JOIN mdm.dbo.meter m  
+	ON m.meteridentifier = h.meteridentifier    
+	INNER JOIN mdm.dbo.MeterReadIntervalDetail d  
+	ON d.meterreadintervalheaderid = h.meterreadintervalheaderid  
+	INNER JOIN mdm.dbo.electricmeters em  
+	ON em.meteridentifier= m.meteridentifier 
+	INNER JOIN mdm.dbo.location l  
+	ON l.locationid = m.locationid  
+	INNER JOIN mdm.dbo.substation s  
+	ON s.substationid = l.substationid  
+WHERE 
+	h.readlogdate >= '2018-01-01' 
+    AND h.readlogdate < '2018-02-01'
+	AND h.uom = 'kWh'
+	--AND d.ReadQualityCode = '3' --Good Reads Only for now
+	
+SELECT COUNT(*) 
+FROM mdm.dbo.meterreadintervalheader h 
+	INNER JOIN mdm.dbo.meter m
+	ON m.meteridentifier = h.meteridentifier
+	INNER JOIN mdm.dbo.MeterReadIntervalDetail d  
+	ON d.meterreadintervalheaderid = h.meterreadintervalheaderid  
+	INNER JOIN mdm.dbo.electricmeters em  
+	ON em.meteridentifier= m.meteridentifier 
+	INNER JOIN mdm.dbo.location l  
+	ON l.locationid = m.locationid  
+	INNER JOIN mdm.dbo.substation s  
+	ON s.substationid = l.substationid  
+WHERE 
+	h.readlogdate >= '2018-01-01' 
+    AND h.readlogdate < '2018-02-01'
+	--AND h.uom = 'kWh'
+	--AND d.ReadQualityCode = '3' --Good Reads Onl
+202,385,198
+	
+SELECT COUNT(*) 
+FROM mdm.dbo.meterreadintervalheader h 
+	INNER JOIN mdm.dbo.MeterReadIntervalDetail d
+	ON d.meterreadintervalheaderid = h.meterreadintervalheaderid
+WHERE 
+	h.readlogdate >= '2018-01-01' 
+    AND h.readlogdate < '2018-02-01'
+	--AND h.uom = 'kWh'
+	--AND d.ReadQualityCode = '3' --Good Reads Onl
+206,149,091	
+	
+SELECT COUNT(*) 
+FROM mdm.dbo.meterreadintervalheader h 
+	INNER JOIN mdm.dbo.meter m
+	ON m.meteridentifier = h.meteridentifier
+	INNER JOIN mdm.dbo.MeterReadIntervalDetail d  
+	ON d.meterreadintervalheaderid = h.meterreadintervalheaderid  
+	INNER JOIN mdm.dbo.electricmeters em  
+	ON em.meteridentifier= m.meteridentifier 
+	INNER JOIN mdm.dbo.location l  
+	ON l.locationid = m.locationid  
+	INNER JOIN mdm.dbo.substation s  
+	ON s.substationid = l.substationid  
+WHERE 
+	h.readlogdate >= '2018-01-01' 
+    AND h.readlogdate < '2018-02-01'
+	AND h.uom = 'kWh'
+	--AND d.ReadQualityCode = '3' --Good Reads Onl
+40,135,207
+	
+-- We have 160,000,000 readings when leaving off the inner joins 
+Where did all this data go to?????
+160 millions is alot, need to review this after a first iteration is resolved.
+
+-- review the uom's since we could have wrong or issues WHERE
+-- and differing kWh values
+SELECT Uom, count(Uom) 
+FROM mdm.dbo.meterreadintervalheader h 
+	INNER JOIN mdm.dbo.meter m
+	ON m.meteridentifier = h.meteridentifier
+	INNER JOIN mdm.dbo.MeterReadIntervalDetail d  
+	ON d.meterreadintervalheaderid = h.meterreadintervalheaderid  
+	INNER JOIN mdm.dbo.electricmeters em  
+	ON em.meteridentifier= m.meteridentifier 
+	INNER JOIN mdm.dbo.location l  
+	ON l.locationid = m.locationid  
+	INNER JOIN mdm.dbo.substation s  
+	ON s.substationid = l.substationid  
+WHERE 
+	h.readlogdate >= '2018-01-01' 
+    AND h.readlogdate < '2018-02-01'
+	--AND d.ReadQualityCode = '3' --Good Reads Onl
+GROUP BY Uom
+
+Voltage Phase C	20343602
+Voltage Phase B	20343410
+Current Phase C	20304583
+kVAh	39307
+kVARh-R	48235
+KVARQ1	18475
+Voltage Phase A	20343410
+**KWH	40135207**
+Current Phase A	20304679
+Current Phase B	20304007
+**kWh-R	20313127**
+kVAh-R	39307
+Voltage	16020579
+KVARH	3827270
+
+-- What do we need to do with kWh-R?????
+
+```
+
+## Adding grouping fields for data review and building summary
+
+- month  - integer value to represent the month
+- week -  - integer value to represent the week
+- weekday {Sun, Mon, Tue, Wed, Thu, Fri, Sat}
+- hour    integer value to represent the hour - {1-24, or 0-23 to be accurate}
+- hhmm    factor from 00:00 to 23:45 {96 values}  ending interval
+- isWeekDay - boolean or string to let us know if it is WeekDay or Weekend, loads change shape on weekends.
+
+
+## Review of the data... 
+ h.ReadDate                    i.ReadDate                    Readvalue            Uom            ReadQualityCode  RecordInterval    VeeFlag          ChannelStatus      SubstationName    
+ Min.   :2018-01-01 00:00:00   Min.   :2018-01-01 00:00:00   Min.   : -0.0375   Length:40135207    Min.   :-1.000   Min.   :300.0   Length:40135207    Length:40135207    Length:40135207   
+ 1st Qu.:2018-01-08 00:00:00   1st Qu.:2018-01-08 19:30:00   1st Qu.:  0.0950   Class :character   1st Qu.: 3.000   1st Qu.:900.0   Class :character   Class :character   Class :character  
+ Median :2018-01-16 00:00:00   Median :2018-01-16 14:00:00   Median :  0.3845   Mode  :character   Median : 3.000   Median :900.0   Mode  :character   Mode  :character   Mode  :character  
+ Mean   :2018-01-16 01:20:56   Mean   :2018-01-16 13:20:32   Mean   :  0.7188                      Mean   : 2.973   Mean   :899.9                                                           
+ 3rd Qu.:2018-01-24 00:00:00   3rd Qu.:2018-01-24 07:30:00   3rd Qu.:  0.9858                      3rd Qu.: 3.000   3rd Qu.:900.0                                                           
+ Max.   :2018-01-31 00:00:00   Max.   :2018-02-01 00:00:00   Max.   :263.9831                      Max.   :10.000   Max.   :900.0                                                           
+                                                                                                                                                                                            
+ MeterIdentifier  LocationNumber        month        week      weekday             h             hhmm            isWeekDay       
+ Min.   : 36920   Min.   :  10260   Min.   :1   Min.   :1.00   Sun:5180546   Min.   : 0.0   00:00  :  418323   Weekend:10343773  
+ 1st Qu.:301064   1st Qu.: 480140   1st Qu.:1   1st Qu.:2.00   Mon:6477787   1st Qu.: 5.0   01:45  :  418293   Weekday:29791434  
+ Median :401426   Median :2110910   Median :1   Median :3.00   Tue:6474617   Median :11.0   00:15  :  418292                     
+ Mean   :392836   Mean   :2809667   Mean   :1   Mean   :2.75   Wed:6492232   Mean   :11.5   00:30  :  418292                     
+ 3rd Qu.:405627   3rd Qu.:4243280   3rd Qu.:1   3rd Qu.:4.00   Thu:5179011   3rd Qu.:17.0   00:45  :  418292                     
+ Max.   :905071   Max.   :9290400   Max.   :1   Max.   :5.00   Fri:5167787   Max.   :23.0   (Other):38037763                     
+                                                               Sat:5163227                  NA's   :    5952   
+
+Key items of note
+
+ReadValue minimum is negative...
+Max is 263
+Mean and medium have some seperation which means be careful using average/mean
+
+### Counts for Checking Consistency
+
+40,135,207 records pulled
+13,728 unique Locations
+
+## Locations with bad or incomplete data, 2,399
+
+### Review the distribution of the data  
+
+- Right Shifted / Left Shifted
+- Normal
+- Apply log and sqrt to see if this helps normalize the data
+
+
+### Review the distribution for the data for 4191826
+
+- Right Shifted / Left Shifted
+- Normal
+- Apply log and sqrt to see if this helps normalize the data
+
+### Review a scatter plot for Location 4191826
+
+- Raw 15min too messy per day.
+- Raw 15min to messy per day of week
+- Raw data will just be prone to day to day issues, like weather, loads from diff substations
+ and other factors unknown.
+
+ ### Moving on to Summarizing the data
+
+### Scaling 
+
+- readvalue/max
+- readvalue/ std
+- mean/Max
+- mean/std
+
+Issues???
+    - Size of data
+    - How often this needs to run
+    - Accuracy Checking.
+
+# Questions
+
+1. How often are we expected to run this analysis?
+
+## Notes
+
+White-paper
+
+Predicting Consumer Load Profiles Using Commercial and Open Data
+Dauwe Vercamer, Bram Steurtewagen, Dirk Van den Poel, Senior Member, IEEE, and Frank Vermeulen
+
+This paper addresses the issue of assigning new customers, for whom no AMI readings are available, to one of these load profiles. This post-clustering phase has received little attention in the past
+
+Step: 
+Identify and remove outliers from each location.
+Identify and check on 0 values, and remove.
+Identify and correct or remove duplicate intervals...
+identify and remove locations with not enough data.
+
+
+
+
+## Cluster Experiment One
+
+```{r c1}
+
+# get the unique locations
+x <- unique(data$LocationNumber)
+locationNumber <- data.frame(x)
+
+sample <- locationNumber[sample(nrow(locationNumber), 5), ]
+sample <- c(sample, '4191826')
+length(sample)
+length(unique(sample))
+
+# Get the data just for the unique locations
+sampleData <- subset(data, data$LocationNumber %in% sample)
+
+
+```
+
+```{r dist}
+
+sampleData_clean <- sampleData %>%
+  mutate(name = LocationNumber,
+         read_value = Readvalue,
+         read_date = factor(h.ReadDate),
+         hhmm = factor(hhmm)
+         ) %>%
+  select(name, 
+         read_value,
+         read_date,
+         hhmm,
+         read_value)
+
+#sampleData_clean$read_value <- scale(sampleData_clean$read_value)
+
+sampleData_dist <- daisy(sampleData_clean,
+                    metric = "gower",
+                    type = list(logratio = 3))
+
+summary(sampleData_dist)
+
+
+gower_matrix <- as.matrix(sampleData_dist)
+
+# Output most similar pair
+
+sampleData_clean[
+  which(gower_matrix == min(gower_matrix[gower_matrix != min(gower_matrix)]),
+        arr.ind = TRUE)[1, ], ]
+
+# Output most dissimilar pair
+
+sampleData_clean[
+  which(gower_matrix == max(gower_matrix[gower_matrix != max(gower_matrix)]),
+        arr.ind = TRUE)[1, ], ]
+
+
+# Calculate silhouette width for many k using PAM
+
+sil_width <- c(NA)
+
+for(i in 2:10){
+  
+  pam_fit <- pam(sampleData_dist,
+                 diss = TRUE,
+                 k = i)
+  
+  sil_width[i] <- pam_fit$silinfo$avg.width
+  
+}
+
+# Plot sihouette width (higher is better)
+
+plot(1:10, sil_width,
+     xlab = "Number of clusters",
+     ylab = "Silhouette Width")
+lines(1:10, sil_width)
+
+```
+
+
+```{r C2}
+
+pam_fit <- pam(sampleData_dist, diss = TRUE, k = 3)
+
+pam_results <- sampleData_clean %>%
+  dplyr::select(-name) %>%
+  mutate(cluster = pam_fit$clustering) %>%
+  group_by(cluster) %>%
+  do(the_summary = summary(.))
+
+pam_results$the_summary
+
+sampleData_clean[pam_fit$medoids, ]
+
+tsne_obj <- Rtsne(sampleData_dist, is_distance = TRUE)
+
+tsne_data <- tsne_obj$Y %>%
+  data.frame() %>%
+  setNames(c("X", "Y")) %>%
+  mutate(cluster = factor(pam_fit$clustering),
+         name = sampleData_clean$name)
+
+ggplot(aes(x = X, y = Y), data = tsne_data) +
+  geom_point(aes(color = cluster))
+
+
+```
+
+```{r C5}
+
+tsne_data %>%
+  filter(X > 15 & X < 25,
+         Y > -15 & Y < -10) %>%
+  left_join(sampleData_clean, by = "name") %>%
+  collect %>%
+  .[["name"]]
+
+```
+
+## Experiment with K-means
+
+```{r kmeans-experiment-failed}
+
+# Subset the attitude data
+dat = data[,c(1,2,3,10)]
+dat <- subset(dat, dat$h.ReadDate < as.POSIXct("2018-01-01"))
+
+# Perform K-Means with 2 clusters
+set.seed(7)
+km1 = kmeans(dat, 2, nstart=100)
+
+# Plot results
+plot(dat, col =(km1$cluster +1) , main="K-Means result with 2 clusters", pch=20, cex=2)
+
+
+```
+
+
+## nasty query to eat up all the sql server resources
+
+```sql
+
+
+
+
+## Location 1522548
+```{r plot_10, ,fig.width=10, fig.height=5,echo=FALSE}
+
+LocationNumber <- 1522548
+
+df <- subset(data,data$LocationNumber == 1522548)
+
+fxn_histogram_plot(df,LocationNumber)
+fxn_daily_scatter_plot(df,LocationNumber)
+fxn_dow_scatter_plot(df,LocationNumber)
+```
+
+```{r plot_11, fig.width=10, fig.height=10,echo=FALSE}
+
+fxn_day_scatter_plot(df,LocationNumber)
+
+```
+
+```{r plot_12,fig.width=10, fig.height=5,echo=FALSE}
+
+fxn_scaled_plot(LocationNumber)
+rm(df)
+
+```
+
+## Location 1630115
+```{r plot_13, ,fig.width=10, fig.height=5,echo=FALSE}
+
+LocationNumber <- 1630115
+
+df <- subset(data,data$LocationNumber == 1630115)
+
+fxn_histogram_plot(df,LocationNumber)
+fxn_daily_scatter_plot(df,LocationNumber)
+fxn_dow_scatter_plot(df,LocationNumber)
+```
+
+```{r plot_14, fig.width=10, fig.height=10,echo=FALSE}
+
+fxn_day_scatter_plot(df,LocationNumber)
+
+```
+
+```{r plot_15,fig.width=10, fig.height=5,echo=FALSE}
+
+fxn_scaled_plot(LocationNumber)
+rm(df)
+
+```
+
+## Location 1530057
+```{r plot_16, ,fig.width=10, fig.height=5,echo=FALSE}
+
+LocationNumber <- 1530057
+
+df <- subset(data,data$LocationNumber == 1530057)
+
+fxn_histogram_plot(df,LocationNumber)
+fxn_daily_scatter_plot(df,LocationNumber)
+fxn_dow_scatter_plot(df,LocationNumber)
+```
+
+```{r plot_17, fig.width=10, fig.height=10,echo=FALSE}
+
+fxn_day_scatter_plot(df,LocationNumber)
+
+```
+
+```{r plot_18,fig.width=10, fig.height=5,echo=FALSE}
+
+fxn_scaled_plot(LocationNumber)
+rm(df)
+
+```
+
+
+
+
+IF OBJECT_ID('tempdb..#data_kwh') IS NOT NULL DROP TABLE #data_kwh
+IF OBJECT_ID('tempdb..#LocationReadValueMax') IS NOT NULL DROP TABLE #LocationReadValueMax
+IF OBJECT_ID('tempdb..#data_summary') IS NOT NULL DROP TABLE #data_summary
+IF OBJECT_ID('tempdb..#data_total') IS NOT NULL DROP TABLE #data_total
+IF OBJECT_ID('tempdb..#model') IS NOT NULL DROP TABLE #model
+IF OBJECT_ID('tempdb..#meters') IS NOT NULL DROP TABLE #meters
+IF OBJECT_ID('tempdb..#match_results') IS NOT NULL DROP TABLE #match_results
+
+SELECT  
+	  h.ReadLogDate     
+	, d.ReadDate           
+	, d.Readvalue      
+	, h.Uom
+	, d.ReadQualityCode  
+	, d.RecordInterval
+	, d.VeeFlag
+	, d.ChannelStatus
+	, s.SubstationName  SubstationName  
+	, h.MeterIdentifier
+    , l.LocationNumber  
+INTO #data_kwh
+FROM mdm.dbo.meterreadintervalheader h  
+	INNER JOIN mdm.dbo.meter m  
+	ON m.meteridentifier = h.meteridentifier    
+	INNER JOIN mdm.dbo.MeterReadIntervalDetail d  
+	ON d.meterreadintervalheaderid = h.meterreadintervalheaderid  
+	INNER JOIN mdm.dbo.electricmeters em  
+	ON em.meteridentifier= m.meteridentifier 
+	INNER JOIN mdm.dbo.location l  
+	ON l.locationid = m.locationid  
+	INNER JOIN mdm.dbo.substation s  
+	ON s.substationid = l.substationid  
+WHERE 
+	h.readlogdate >= '2018-01-01' 
+    AND h.readlogdate < '2018-02-01'
+	AND h.uom = 'kWh'
+	--AND d.ReadQualityCode = '3' --Good Reads Only for now
+
+
+-- get the max for each location
+SELECT   
+	  max(Readvalue)  [max_per_group]  
+    , LocationNumber  
+INTO #LocationReadValueMax
+FROM #data_kwh 
+GROUP BY LocationNumber
+
+
+-- Get a Summary of the data
+-- SELECT COUNT(*) FROM #data_summary
+SELECT  
+	  convert(varchar(20), ReadDate, 8)  AS 'hh:mm'       
+	, Uom
+    , #data_kwh.LocationNumber  
+	, MeterIdentifier
+	, avg(Readvalue) mean_value
+	--, median(Readvalue) median
+	, min(Readvalue) min_value
+	, max(Readvalue) max_value
+	, sum(Readvalue) sum_value
+	, AVG(max_per_group) scaled_mean
+	, STDEV(ReadValue) std	
+    , NULL AS scaled_value_max
+    , NULL AS scaled_value_sd
+	, count(*) n
+INTO #data_summary
+FROM #data_kwh
+INNER JOIN #LocationReadValueMax
+    ON #LocationReadValueMax.LocationNumber = #data_kwh.LocationNumber
+GROUP BY 
+	  convert(varchar(20), ReadDate, 8)       
+	, Uom
+    , #data_kwh.LocationNumber  
+	, MeterIdentifier
+
+
+SELECT 
+	  LocationNumber
+	, MeterIdentifier
+	, count(*) intervals
+	, 2976 expected 
+INTO #data_total    
+FROM 
+#data_summary
+GROUP BY 
+	LocationNumber,
+	MeterIdentifier
+
+ -- Remove Bad Locations, without expected interval counts
+DELETE FROM #data_summary
+WHERE LocationNumber 
+	IN (SELECT LocationNumber FROM #data_total WHERE intervals < 0)  --2976
+
+DELETE FROM #data_summary
+WHERE LocationNumber 
+	IN (SELECT LocationNumber FROM #data_total WHERE intervals < 0)  --2976    
+
+UPDATE #data_summary
+SET 
+	scaled_value_max = mean_value / nullif(max_value, 0)
+	--,scaled_value_sd  = mean_value / std
+
+
+SELECT * FROM #data_summary
+WHERE LocationNumber = 118419
+
+SELECT * FROM #data_summary
+WHERE LocationNumber = 120582
+
+-- Get the Model
+SELECT * INTO #model FROM #data_summary WHERE LocationNumber = 118419
+
+-- Get all the LocationNumbers, iterate over them
+DECLARE @LocationNumber VARCHAR(50) 
+DECLARE cursor_meters CURSOR FOR  
+SELECT LocationNumber FROM #data_summary GROUP BY LocationNumber
+
+OPEN cursor_meters   
+FETCH NEXT FROM cursor_meters INTO @LocationNumber   
+WHILE @@FETCH_STATUS = 0   
+BEGIN   
+    Print(@LocationNumber)  
+	FETCH NEXT FROM cursor_meters INTO @LocationNumber   
+END   
+CLOSE cursor_meters   
+DEALLOCATE cursor_meters
