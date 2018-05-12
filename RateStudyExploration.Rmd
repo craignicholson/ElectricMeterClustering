@@ -22,8 +22,7 @@ library(knitr)
 
 ```{r data}
 
-#data <- read.csv(file="C:/Users/craig/source/repos/rcode/duck_river_rate_study/2018.01.csv", header=TRUE, sep=",")
-data <- read_csv("C:/Users/craig/source/repos/rcode/duck_river_rate_study/2018.01.csv")
+data <- read_csv("C:/Users/craig/source/repos/rcode/ElectricMeterClustering/2018.01.csv")
 
 ```
 
@@ -749,7 +748,7 @@ anova(m1, m2)
 
 ### Model Predictions
 
-```{r linear_model_example}
+```{r linear_model_example 2}
 
 thisIntervalkWh <- data.frame(hhmm = '12:00', isWeekDay = 'Weekday', weekday = 'Mon' )
 modelEstimate <- predict(m2, newdata = thisIntervalkWh, interval='prediction', level=0.95)
