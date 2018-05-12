@@ -22,7 +22,7 @@ library(knitr)
 
 ```{r data}
 
-data <- read_csv("C:/Users/craig/source/repos/rcode/ElectricMeterClustering/2018.01.csv")
+data <- read_csv("C:/Users/craig/source/repos/ElectricMeterClustering/2018.01.csv")
 
 ```
 
@@ -719,43 +719,43 @@ fxn_scaled_plot_facet_wrap(locations)
 We would like to build a linear model for kWh.
 
 ```{r linear_model_example}
-library(memisc)
-
-locations <- c(4191826)
-df <- subset(data, data$LocationNumber %in% locations)
-
-#Subtation
-#isWeekDay
-#weekday
-
-
-m1 <- lm(Readvalue ~ hhmm + weekday,data = df)
-m2 <- lm(Readvalue ~ hhmm + isWeekDay + weekday,data = df)
-#m2 <- update(m1 ~ . + isweekDay)
-#m2 <- update(m1 ~ . + weekday)
-#m3 <- update(m2 ~ . + SubstationName)
-mtable(m1)
-
-
-
-layout(matrix(c(1,2,3,4),2,2))
-plot(m1)
-
-
-anova(m1, m2)
+# library(memisc)
+# 
+# locations <- c(4191826)
+# df <- subset(data, data$LocationNumber %in% locations)
+# 
+# #Subtation
+# #isWeekDay
+# #weekday
+# 
+# 
+# m1 <- lm(Readvalue ~ hhmm + weekday,data = df)
+# m2 <- lm(Readvalue ~ hhmm + isWeekDay + weekday,data = df)
+# #m2 <- update(m1 ~ . + isweekDay)
+# #m2 <- update(m1 ~ . + weekday)
+# #m3 <- update(m2 ~ . + SubstationName)
+# mtable(m1)
+# 
+# 
+# 
+# layout(matrix(c(1,2,3,4),2,2))
+# plot(m1)
+# 
+# 
+# anova(m1, m2)
 
 ```
 
 ### Model Predictions
 
 ```{r linear_model_example 2}
-
-thisIntervalkWh <- data.frame(hhmm = '12:00', isWeekDay = 'Weekday', weekday = 'Mon' )
-modelEstimate <- predict(m2, newdata = thisIntervalkWh, interval='prediction', level=0.95)
-
-head(modelEstimate)
-
-exp(modelEstimate)
+# 
+# thisIntervalkWh <- data.frame(hhmm = '12:00', isWeekDay = 'Weekday', weekday = 'Mon' )
+# modelEstimate <- predict(m2, newdata = thisIntervalkWh, interval='prediction', level=0.95)
+# 
+# head(modelEstimate)
+# 
+# exp(modelEstimate)
 
 ```
 
